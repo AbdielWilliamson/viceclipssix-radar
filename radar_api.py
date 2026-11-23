@@ -76,13 +76,15 @@ def videos(ids):
     out = {}
     ids = list(dict.fromkeys(ids))
     for i in range(0, len(ids), 50):
-        for v in api("videos", 1, part="snippet,statistics,contentDetails", id=",".join(ids[i:i + 50])).get("items", []):
+        for v in api("videos", 1, part="snippet,statistics,contentDetails,liveStreamingDetails", id=",".join(ids[i:i + 50])).get("items", []):
             sn, st = v["snippet"], v.get("statistics", {})
             out[v["id"]] = {"id": v["id"], "title": sn.get("title"), "channel": sn.get("channelTitle"),
                             "channel_id": sn.get("channelId"), "published": sn.get("publishedAt"),
                             "views": int(st.get("viewCount", 0)), "likes": int(st.get("likeCount", 0) or 0),
                             "comments": int(st.get("commentCount", 0) or 0),
-                            "duration": duracion_s(v.get("contentDetails", {}).get("duration"))}
+                            "duration": duracion_s(v.get("contentDetails", {}).get("duration")),
+                            # transmisión en vivo (o que fue en vivo): no sirve como Short
+                            "live": bool(v.get("liveStreamingDetails")) or sn.get("liveBroadcastContent") != "none"}
     return out
 
 
@@ -131,7 +133,7 @@ def noticias(consultas):
     for q in consultas:
         ids += buscar(q, True)
     # sin duración = transmisión en vivo: no sirve como noticia para un Short
-    vs = [v for v in videos(ids).values() if v["views"] >= NEWS_MIN_VIEWS and v["duration"]]
+    vs = [v for v in videos(ids).values() if v["views"] >= NEWS_MIN_VIEWS and v["duration"] and not v["live"]]
     out = []
     for v in vs:
         r = ficha(v)
@@ -149,7 +151,7 @@ def formatos(consultas):
         ids = [i for i in buscar(q, False) if i not in vistos]
         vistos.update(ids)
         for v in videos(ids).values():
-            if v["views"] < FORMAT_MIN_VIEWS or not v["duration"]:
+            if v["views"] < FORMAT_MIN_VIEWS or not v["duration"] or v["live"]:
                 continue
             r = ficha(v)
             if r["outlier_channel"] and r["outlier_channel"] >= FORMAT_OUTLIER:
