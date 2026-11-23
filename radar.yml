@@ -1,0 +1,44 @@
+# Radar de ViceClipsSix en la nube: corre aunque la PC esté apagada.
+# Horas en UTC (Panamá = UTC-5): 13:00 UTC = 8:00, 18:00 UTC = 13:00, 23:00 UTC = 18:00.
+# La de la mañana es completa (noticias + formatos); las otras dos, solo noticias, para no pasar el cupo diario de la API.
+name: radar
+on:
+  schedule:
+    - cron: "0 13 * * *"
+    - cron: "0 18 * * *"
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "noticias o completo"
+        default: "completo"
+
+permissions:
+  contents: write
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.3
+      - name: Correr el radar
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          MODO="${{ github.event.inputs.modo }}"
+          if [ -z "$MODO" ]; then
+            if [ "$(date -u +%H)" = "13" ]; then MODO=completo; else MODO=noticias; fi
+          fi
+          python radar_api.py --modo "$MODO"
+      - name: Guardar el informe
+        run: |
+          git config user.name "radar-bot"
+          git config user.email "radar-bot@users.noreply.github.com"
+          git add reports/
+          git commit -m "radar $(date -u +%Y-%m-%dT%H:%MZ)" || echo "sin cambios"
+          git push
